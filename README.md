@@ -16,6 +16,8 @@ A lightweight CLI tool that converts your React SPA into static HTML files, each
 - Copies static assets excluding HTML files
 - Easy-to-use CLI with debug support
 - Cross-platform compatibility
+- Skip volatile elements during prerender to prevent hydration mismatches (using skipPrerenderSelector)
+- Set custom viewport dimensions for Puppeteer rendering (using viewport)
 
 ## Installation
 
@@ -38,7 +40,9 @@ Install as a development dependency:
       outDir: "static-pages",
       serveDir: "build",
       flatOutput: false, // Optional: true for about.html, false for about/index.html
-      buildCommand: "npm run build" // Default, can be omitted
+      buildCommand: "npm run build", // Default, can be omitted
+      skipPrerenderSelector: '[data-skip-prerender]', // Optional: elements to skip during prerender
+      viewport: { width: 1200, height: 800 } // Optional, can be omitted
     };
     ```
 
@@ -60,8 +64,20 @@ Install as a development dependency:
         outDir: "static-pages",
         serveDir: "build",
         flatOutput: false, // Optional: true for about.html, false for about/index.html
+        skipPrerenderSelector: '[data-skip-prerender]'
    };
     ```
+
+#### skipPrerenderSelector
+
+If your React app has areas that change frequently on the client side (like ads, dynamic content, or responsive breakpoints), you can mark them with a `data-skip-prerender` attribute (or any CSS selector you prefer).  
+These elements will be removed before Puppeteer captures the HTML, preventing FOUC and hydration mismatches.
+
+#### viewport
+
+You can optionally set a viewport size to emulate desktop or mobile when prerendering.  
+If not set, Puppeteer will use its default 800x600 viewport.
+
 
 ### Dynamic Routes
 
@@ -87,7 +103,9 @@ export default async function() {
       ...blogRoutes // Dynamic blog routes
     ],
     outDir: "static-pages",
-    serveDir: "build"
+    serveDir: "build",
+    skipPrerenderSelector: '[data-skip-prerender]',
+    viewport: { width: 1200, height: 800 }
   };
 }
 
@@ -278,6 +296,8 @@ npm run prerender
 | `serveDir` | `string` | `"build"` | Directory containing your built React app |
 | `buildCommand` | `string` | `"npm run build"` | Command to build your app when using `--with-build` |
 | `flatOutput` | `boolean` | `false` | Output structure: `true` = `about.html`, `false` = `about/index.html` |
+| `skipPrerenderSelector` | `string` | undefined | Optional CSS selector for elements to skip during prerender (e.g., '[data-skip-prerender]') |
+| `viewport` | `{ width: number, height: number }` | undefined | Optional viewport dimensions for Puppeteer (default: 800x600) |
 
 ## CLI Options
 
@@ -350,6 +370,9 @@ Use the `--debug` flag to see detailed server logs:
 ```bash
 npx react-static-prerender --debug
 ```
+
+### Multiple passes for sites with responsive design
+For sites with responsive design, you can run multiple prerender passes with different viewport sizes to capture different layouts.
 
 ### Port conflicts
 The tool automatically finds available ports starting from 5050, so port conflicts should be rare.
