@@ -12,14 +12,14 @@ async function findAvailablePort(startPort = 5050) {
         server.listen(port, () => {
           server.close(() => resolve(port));
         });
-        server.on('error', reject);
+        server.on("error", reject);
       });
       return port;
     } catch (error) {
       continue;
     }
   }
-  throw new Error('No available port found');
+  throw new Error("No available port found");
 }
 
 async function waitForServer(port, maxAttempts = 30) {
@@ -28,10 +28,12 @@ async function waitForServer(port, maxAttempts = 30) {
       const response = await fetch(`http://localhost:${port}`);
       if (response.ok) return true;
     } catch (error) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
   }
-  throw new Error(`Server on port ${port} did not start within ${maxAttempts} seconds`);
+  throw new Error(
+    `Server on port ${port} did not start within ${maxAttempts} seconds`
+  );
 }
 
 async function killProcessGroup(childProcess) {
@@ -43,26 +45,24 @@ async function killProcessGroup(childProcess) {
 
     const timeout = setTimeout(() => {
       try {
-        process.kill(-childProcess.pid, 'SIGKILL');
-      } catch (e) {
-        // Process might already be dead
-      }
+        process.kill(-childProcess.pid, "SIGKILL");
+      } catch (e) {}
       resolve();
     }, 2000);
 
-    childProcess.on('exit', () => {
+    childProcess.on("exit", () => {
       clearTimeout(timeout);
       resolve();
     });
 
-    childProcess.on('error', () => {
+    childProcess.on("error", () => {
       clearTimeout(timeout);
       resolve();
     });
 
     try {
-      process.kill(-childProcess.pid, 'SIGTERM');
-    } catch (e) {
+      process.kill(-childProcess.pid, "SIGTERM");
+    } catch {
       clearTimeout(timeout);
       resolve();
     }
@@ -74,7 +74,9 @@ export async function prerender(config) {
     routes = [],
     outDir = "static-pages",
     serveDir = "build",
-    flatOutput = false
+    flatOutput = false,
+    skipPrerenderSelector,
+    viewport,
   } = config;
 
   const outDirPath = path.resolve(process.cwd(), outDir);
@@ -84,16 +86,20 @@ export async function prerender(config) {
   let browser = null;
 
   try {
-    serveProcess = spawn("npx", ["serve", "-s", serveDir, "-l", port.toString()], {
-      stdio: ["pipe", "pipe", "pipe"],
-      shell: true,
-      detached: true,
-    });
+    serveProcess = spawn(
+      "npx",
+      ["serve", "-s", serveDir, "-l", port.toString()],
+      {
+        stdio: ["pipe", "pipe", "pipe"],
+        shell: true,
+        detached: true,
+      }
+    );
 
-    serveProcess.stdout.on("data", data => {
+    serveProcess.stdout.on("data", (data) => {
       if (process.env.DEBUG) process.stdout.write(`[serve] ${data}`);
     });
-    serveProcess.stderr.on("data", data => {
+    serveProcess.stderr.on("data", (data) => {
       if (process.env.DEBUG) process.stderr.write(`[serve] ${data}`);
     });
 
@@ -102,9 +108,14 @@ export async function prerender(config) {
 
     browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-dev-shm-usage']
+      args: ["--no-sandbox", "--disable-dev-shm-usage"],
     });
     const page = await browser.newPage();
+
+    // set viewport if defined
+    if (viewport) {
+      await page.setViewport(viewport);
+    }
 
     await fs.mkdir(outDirPath, { recursive: true });
 
@@ -113,6 +124,14 @@ export async function prerender(config) {
       console.log(`📄 Processing route: ${route}`);
 
       await page.goto(url, { waitUntil: "networkidle0" });
+
+      // remove volatile elements before capturing HTML
+      if (skipPrerenderSelector) {
+        await page.evaluate((selector) => {
+          document.querySelectorAll(selector).forEach((el) => el.remove());
+        }, skipPrerenderSelector);
+      }
+
       const html = await page.content();
 
       if (route === "/") {
@@ -129,20 +148,17 @@ export async function prerender(config) {
           const routeDir = path.join(outDirPath, safeName);
           await fs.mkdir(routeDir, { recursive: true });
           await fs.writeFile(path.join(routeDir, "index.html"), html);
-          console.log(`✅ Saved static page: ${path.join(safeName, "index.html")}`);
+          console.log(
+            `✅ Saved static page: ${path.join(safeName, "index.html")}`
+          );
         }
       }
     }
-
   } catch (error) {
     console.error("❌ Prerendering failed:", error);
     throw error;
   } finally {
-    if (browser) {
-      await browser.close();
-    }
-    if (serveProcess) {
-      await killProcessGroup(serveProcess);
-    }
+    if (browser) await browser.close();
+    if (serveProcess) await killProcessGroup(serveProcess);
   }
 }
