@@ -138,7 +138,7 @@ export async function prerender(config) {
         await fs.writeFile(path.join(outDirPath, "index.html"), html);
         console.log(`✅ Saved static page: index.html`);
       } else {
-        const safeName = route.replace(/^\//, "").replace(/\//g, "-") || "root";
+        const safeName = route.replace(/^\//, "") || "root";
 
         if (flatOutput) {
           const fileName = `${safeName}.html`;
